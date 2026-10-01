@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ผัง VPD ห้องปลูก</title>
+<meta name="description" content="ผัง VPD และตัวคำนวณ VPD อากาศ / VPD ใบ / จุดน้ำค้าง">
+<meta name="theme-color" content="#1f6f5c">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="VPD">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+/* Layout: working reference sheet — controls + calculator up top, full-width grid below, method notes last */
+:root{
+  --bg:#f5f7f6; --surface:#ffffff; --fg:#17201c; --muted:#5b6862; --line:#d7dfdb; --accent:#1f6f5c;
+  --z-red:#d9534f; --z-red-fg:#fff;
+  --z-blue:#3d6fb6; --z-blue-fg:#fff;
+  --z-green:#5f9e3a; --z-green-fg:#fff;
+  --z-yellow:#e9c443; --z-yellow-fg:#2a2405;
+  --hl:#111;
+  --f-body:"Sukhumvit Set","Noto Sans Thai","Leelawadee UI",Tahoma,system-ui,sans-serif;
+  --f-mono:ui-monospace,"SF Mono",Menlo,"Roboto Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111715; --surface:#18211e; --fg:#e4ebe7; --muted:#97a69f; --line:#2c3833; --accent:#5cc2a6;
+  --z-red:#b8403c; --z-blue:#33609f; --z-green:#4d8730; --z-yellow:#c9a734; --z-yellow-fg:#1c1803; --hl:#fff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111715; --surface:#18211e; --fg:#e4ebe7; --muted:#97a69f; --line:#2c3833; --accent:#5cc2a6;
+  --z-red:#b8403c; --z-blue:#33609f; --z-green:#4d8730; --z-yellow:#c9a734; --z-yellow-fg:#1c1803; --hl:#fff; color-scheme:dark}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:28px 48px;display:grid;gap:22px}
+.wrap>*{min-width:0}
+h1{font-size:1.7rem;margin:0;text-wrap:balance;font-weight:700}
+h2{font-size:1.1rem;margin:0 0 10px;font-weight:600}
+.ver{font-size:.75rem;font-family:var(--f-mono);color:var(--accent)}
+.sub{color:var(--muted);margin:4px 0 0;max-width:70ch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.controls{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:flex-end}
+.ctl{display:grid;gap:6px}
+.lbl{font-size:.78rem;letter-spacing:.04em;color:var(--muted);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-size:.9rem;border:0;background:transparent;color:var(--fg);padding:7px 14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--bg);font-weight:600}
+.seg button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select,input{font:inherit;font-family:var(--f-body);font-size:16px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+input{width:6.5em}
+.calc{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 18px;align-items:end}
+.out{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px}
+.stat{border-top:2px solid var(--line);padding-top:6px}
+.stat .v{font-family:var(--f-mono);font-size:1.35rem;font-weight:600;font-variant-numeric:tabular-nums}
+.stat .k{font-size:.8rem;color:var(--muted)}
+.pill{display:inline-block;padding:1px 9px;border-radius:99px;font-size:.78rem;font-weight:600;margin-left:6px;vertical-align:middle}
+.note{font-size:.85rem;color:var(--muted);margin:10px 0 0}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;font-family:var(--f-mono);font-size:.72rem;font-variant-numeric:tabular-nums}
+th{font-weight:600;color:var(--fg);padding:4px 3px;background:var(--surface);position:sticky;top:0}
+th.rowh{position:sticky;left:0;z-index:1;padding:0 8px;text-align:right;white-space:nowrap}
+thead th:first-child{left:0;z-index:2}
+td{width:38px;min-width:38px;height:24px;text-align:center;border:1px solid var(--surface);padding:0}
+td.r{background:var(--z-red);color:var(--z-red-fg)}
+td.b{background:var(--z-blue);color:var(--z-blue-fg)}
+td.g{background:var(--z-green);color:var(--z-green-fg)}
+td.y{background:var(--z-yellow);color:var(--z-yellow-fg)}
+td.hit{outline:3px solid var(--hl);outline-offset:-2px;font-weight:700}
+.axis{font-family:var(--f-body);font-size:.8rem;color:var(--muted);padding:8px 12px 0}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:.85rem}
+.sw{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:6px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px}
+.cols>*{min-width:0}
+table.plain{font-family:var(--f-body);font-size:.88rem;width:100%}
+table.plain th,table.plain td{border:0;border-bottom:1px solid var(--line);text-align:left;padding:6px 8px;width:auto;height:auto;position:static}
+table.plain td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+code{font-family:var(--f-mono);font-size:.85em;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+ul{margin:6px 0 0;padding-left:20px}
+li{margin:3px 0}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>ผัง VPD ห้องปลูก</h1>
+    <p class="sub"><span class="ver">v1.0 · ใช้งานออฟไลน์ได้</span><br>หัวแถวคืออุณหภูมิอากาศจริงในห้อง ใช้แทนผังเดิมที่หัวแถวเลื่อนไป 3 °C เลือกได้ว่าจะดู VPD อากาศหรือ VPD ใบ และตั้งค่าว่าใบเย็นกว่าอากาศกี่องศาให้ตรงกับที่วัดจริง</p>
+  </header>
+
+  <section class="panel">
+    <div class="controls">
+      <div class="ctl">
+        <span class="lbl">ประเภท VPD</span>
+        <div class="seg" role="group" aria-label="ประเภท VPD">
+          <button type="button" id="m-leaf" aria-pressed="true">VPD ใบ</button>
+          <button type="button" id="m-air" aria-pressed="false">VPD อากาศ</button>
+        </div>
+      </div>
+      <div class="ctl" id="offWrap">
+        <label class="lbl" for="off">ใบเย็นกว่าอากาศ</label>
+        <select id="off">
+          <option value="0">0 °C</option>
+          <option value="0.5">0.5 °C</option>
+          <option value="1">1 °C</option>
+          <option value="1.5" selected>1.5 °C (LED ทั่วไป)</option>
+          <option value="2">2 °C</option>
+          <option value="3">3 °C</option>
+        </select>
+      </div>
+    </div>
+    <p class="note" id="modeNote"></p>
+  </section>
+
+  <section class="panel">
+    <h2>คำนวณจากค่าที่วัดได้</h2>
+    <div class="calc">
+      <div class="ctl"><label class="lbl" for="cT">อุณหภูมิอากาศ (°C)</label><input id="cT" type="number" step="0.1" value="25"></div>
+      <div class="ctl"><label class="lbl" for="cRH">RH (%)</label><input id="cRH" type="number" step="0.5" value="55"></div>
+      <div class="ctl"><label class="lbl" for="cL">อุณหภูมิใบจาก IR (°C)</label><input id="cL" type="number" step="0.1" value="23.5"></div>
+    </div>
+    <div class="out">
+      <div class="stat"><div class="v" id="oAir">–</div><div class="k">VPD อากาศ (kPa)</div></div>
+      <div class="stat"><div class="v" id="oLeaf">–</div><div class="k">VPD ใบ (kPa)</div></div>
+      <div class="stat"><div class="v" id="oDew">–</div><div class="k">จุดน้ำค้าง (°C)</div></div>
+      <div class="stat"><div class="v" id="oMargin">–</div><div class="k">ใบสูงกว่าจุดน้ำค้าง (°C)</div></div>
+    </div>
+    <p class="note">ช่องที่ตรงกับค่าที่กรอกจะถูกตีกรอบในผังด้านล่าง (ปัดไปที่แถวและคอลัมน์ที่ใกล้ที่สุด) ใบควรสูงกว่าจุดน้ำค้างอย่างน้อย 2–3 °C</p>
+  </section>
+
+  <section>
+    <div class="scroll"><table id="grid" aria-label="ผัง VPD"></table></div>
+    <p class="axis">แถว: อุณหภูมิอากาศ (°C) · คอลัมน์: ความชื้นสัมพัทธ์ (%RH) · ค่าในช่อง: kPa</p>
+  </section>
+
+  <section class="panel">
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <div class="cols">
+    <section class="panel">
+      <h2>ช่วงเป้าหมายระยะดอก (Cannatonic)</h2>
+      <table class="plain">
+        <thead><tr><th>ช่วง</th><th>RH ห้อง</th><th>VPD อากาศ</th><th>VPD ใบ*</th></tr></thead>
+        <tbody>
+          <tr><td>W1–3</td><td class="n">60–65%</td><td class="n">1.1–1.3</td><td class="n">0.8–1.1</td></tr>
+          <tr><td>W4–6</td><td class="n">52–57%</td><td class="n">1.3–1.5</td><td class="n">1.0–1.3</td></tr>
+          <tr><td>W7–ตัด</td><td class="n">45–50%</td><td class="n">1.4–1.6</td><td class="n">1.2–1.5</td></tr>
+        </tbody>
+      </table>
+      <p class="note">*ใบเย็นกว่าอากาศ 1.5 °C ค่าเป็นจุดเริ่มต้น ควรปรับตามข้อมูลจริงของแต่ละล็อต RH ในทรงพุ่มไม่ควรสูงกว่า RH ห้องเกิน 5%</p>
+    </section>
+
+    <section class="panel">
+      <h2>วิธีคำนวณ</h2>
+      <ul>
+        <li><code>SVP(T) = 0.6108 × e^(17.27T / (T + 237.3))</code> kPa (Tetens)</li>
+        <li>VPD อากาศ = <code>SVP(T<sub>อากาศ</sub>) × (1 − RH/100)</code></li>
+        <li>VPD ใบ = <code>SVP(T<sub>ใบ</sub>) − SVP(T<sub>อากาศ</sub>) × RH/100</code></li>
+        <li>จุดน้ำค้างคำนวณจากสูตร Magnus ชุดเดียวกัน</li>
+      </ul>
+      <p class="note">ผังเดิมคำนวณด้วย <code>SVP(T−5) − SVP(T−3) × RH</code> ค่าในแถว "25 °C" ของผังเดิมจึงเป็น VPD ใบสำหรับอากาศ 22 °C ที่ใบ 20 °C ผังนี้ใช้อุณหภูมิอากาศจริงที่หัวแถว</p>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  const temps=[];for(let t=15;t<=35;t++)temps.push(t);
+  const rhs=[];for(let r=84;r>=24;r-=2)rhs.push(r);
+  const svp=t=>0.6108*Math.exp(17.27*t/(t+237.3));
+  const zones=[
+    {max:0.4,c:'r',name:'ต่ำเกิน · เสี่ยงเชื้อรา',range:'< 0.4'},
+    {max:0.8,c:'b',name:'คายน้ำต่ำ · ชำกิ่ง / veg ต้น',range:'0.4–0.8'},
+    {max:1.2,c:'g',name:'คายน้ำดี · veg ปลาย / ดอกต้น',range:'0.8–1.2'},
+    {max:1.6,c:'y',name:'คายน้ำสูง · ดอกกลาง–ปลาย',range:'1.2–1.6'},
+    {max:Infinity,c:'r',name:'สูงเกิน · พืชเครียดน้ำ',range:'> 1.6'}];
+  const zoneOf=v=>zones.find(z=>v<z.max).c;
+  let mode='leaf',off=1.5;
+  const $=id=>document.getElementById(id);
+  const vpd=(t,rh)=>mode==='air'?svp(t)*(1-rh/100):svp(t-off)-svp(t)*rh/100;
+
+  function legend(){
+    $('legend').innerHTML=zones.map(z=>`<span><span class="sw" style="background:var(--z-${({r:'red',b:'blue',g:'green',y:'yellow'})[z.c]})"></span>${z.range} kPa ${z.name}</span>`).join('');
+  }
+  function grid(){
+    let h='<thead><tr><th class="rowh">°C \\ %RH</th>'+rhs.map(r=>`<th>${r}</th>`).join('')+'</tr></thead><tbody>';
+    for(const t of temps){
+      h+=`<tr><th class="rowh">${t}°C</th>`;
+      for(const r of rhs){const v=vpd(t,r);h+=`<td class="${zoneOf(v)}" data-t="${t}" data-r="${r}" title="${t} °C · ${r}% → ${v.toFixed(2)} kPa">${v.toFixed(2)}</td>`;}
+      h+='</tr>';
+    }
+    $('grid').innerHTML=h+'</tbody>';
+    $('modeNote').textContent=mode==='air'
+      ?'แสดง VPD อากาศ ใช้เทียบกับค่า VPD ที่ Priva คำนวณจากเซนเซอร์อากาศ'
+      :`แสดง VPD ใบ โดยสมมติว่าใบเย็นกว่าอากาศ ${off} °C ควรวัดอุณหภูมิใบจริงด้วย IR ที่ยอดทรงพุ่มแล้วเลือกค่าให้ตรง`;
+    $('offWrap').hidden=mode==='air';
+    calc();
+  }
+  function calc(){
+    const T=parseFloat($('cT').value),RH=parseFloat($('cRH').value),L=parseFloat($('cL').value);
+    document.querySelectorAll('td.hit').forEach(e=>e.classList.remove('hit'));
+    if(isNaN(T)||isNaN(RH)||RH<=0||RH>100){['oAir','oLeaf','oDew','oMargin'].forEach(i=>$(i).textContent='–');return;}
+    const air=svp(T)*(1-RH/100);
+    $('oAir').innerHTML=air.toFixed(2)+pill(air);
+    const ea=svp(T)*RH/100,ln=Math.log(ea/0.6108),dew=237.3*ln/(17.27-ln);
+    $('oDew').textContent=dew.toFixed(1);
+    if(!isNaN(L)){const lv=svp(L)-ea;$('oLeaf').innerHTML=lv.toFixed(2)+pill(lv);$('oMargin').textContent=(L-dew).toFixed(1);}
+    else{$('oLeaf').textContent='–';$('oMargin').textContent='–';}
+    const tt=Math.round(T),rr=Math.round(RH/2)*2;
+    const cell=document.querySelector(`td[data-t="${tt}"][data-r="${rr}"]`);
+    if(cell)cell.classList.add('hit');
+  }
+  function pill(v){const c=zoneOf(v),n={r:'red',b:'blue',g:'green',y:'yellow'}[c];
+    return `<span class="pill" style="background:var(--z-${n});color:var(--z-${n}-fg)">${zones.find(z=>z.c===c&&v<z.max).range}</span>`;}
+  function setMode(m){mode=m;$('m-leaf').setAttribute('aria-pressed',m==='leaf');$('m-air').setAttribute('aria-pressed',m==='air');grid();}
+  $('m-leaf').onclick=()=>setMode('leaf');
+  $('m-air').onclick=()=>setMode('air');
+  $('off').onchange=e=>{off=parseFloat(e.target.value);grid();};
+  ['cT','cRH','cL'].forEach(i=>$(i).addEventListener('input',calc));
+  legend();grid();
+})();
+</script>
+
+<script>
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('service-worker.js').catch(()=>{});});}
+</script>
+</body>
+</html>
